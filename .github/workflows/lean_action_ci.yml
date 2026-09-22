@@ -1,0 +1,16 @@
+name: Lean Action CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - run: sudo apt-get update && sudo apt-get install -y libpq-dev libssl-dev pkg-config
+      - uses: leanprover/lean-action@v1
+      - run: lake build LedgerTests
