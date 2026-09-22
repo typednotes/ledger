@@ -103,3 +103,9 @@ container image. `.github/workflows/docker-publish.yml` builds and pushes
 `v*.*.*` tags (tagged with the matching semver and `latest`). There is no
 separate version bump step in `lakefile.lean`; the image tag *is* the
 version.
+
+## Git
+
+**Never run `git push`** (including `--tags`/`--force`), regardless of
+branch. Commits and tags are fine to create locally; pushing is left to the
+user to do themselves.
