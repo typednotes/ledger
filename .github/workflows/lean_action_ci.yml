@@ -11,6 +11,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
-      - run: sudo apt-get update && sudo apt-get install -y libpq-dev libssl-dev pkg-config
+      - run: sudo apt-get update && sudo apt-get install -y libpq-dev libssl-dev pkg-config unzip zlib1g-dev libsecret-1-dev
       - uses: leanprover/lean-action@v1
       - run: lake build LedgerTests

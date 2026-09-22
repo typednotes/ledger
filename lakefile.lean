@@ -17,18 +17,29 @@ open Lake DSL
 -- versions are not exposed as part of its public API.
 
 /-- Run `pkg-config <args>` and return its stdout split into individual flags.
-    Returns `#[]` when pkg-config (or the queried package) is unavailable. -/
+    Returns `#[]` when pkg-config (or the queried package) is unavailable.
+    Sets `PKG_CONFIG_ALLOW_SYSTEM_LIBS=1`: without it, `--libs` silently
+    drops the `-L` for directories pkg-config treats as "system" defaults
+    (e.g. Debian/Ubuntu's multiarch path) — which Lean's bundled `ld.lld`
+    does *not* search by default, so `-lpq` alone fails with `unable to
+    find library -lpq` even though `libpq.so` is right there. -/
 def pkgConfig (args : Array String) : IO (Array String) := do
-  let out ← IO.Process.output { cmd := "pkg-config", args }
+  let out ← IO.Process.output {
+    cmd := "pkg-config", args
+    env := #[("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1")]
+  }
   if out.exitCode != 0 then
     return #[]
   let normalized := (out.stdout.replace "\n" " ").replace "\t" " "
   return (normalized.splitOn " ").filter (· != "") |>.toArray
 
-/-- Link flags for a pkg-config package: its `--libs`, plus an explicit
-    `-L<libdir>` from `--variable=libdir` — needed because `pkg-config --libs`
-    omits directories it considers "default" (e.g. Debian/Ubuntu's multiarch
-    path), which Lean's bundled `ld.lld` does not search by default. -/
+/-- Link flags for a pkg-config package: its `--libs` (with system `-L`
+    dirs kept, see `pkgConfig`), plus a belt-and-suspenders explicit
+    `-L<libdir>` from `--variable=libdir` for `.pc` files that don't embed
+    an `-L` in `Libs:` at all and instead expect the caller to know their
+    install layout. Not every `.pc` file defines a `libdir` variable (e.g.
+    `libpq.pc` doesn't), so this is best-effort on top of `--libs`, not a
+    replacement for it. -/
 def pkgLinkFlags (pkg : String) : IO (Array String) := do
   let libs ← pkgConfig #["--libs", pkg]
   let libdir ← pkgConfig #["--variable=libdir", pkg]
@@ -51,7 +62,10 @@ package ledger where
   version := v!"0.1.0"
   moreLinkArgs := pqLinkArgs
 
-require linen from git "git@github.com:typednotes/linen.git" @ "v1.0.0"
+-- `linen` is a public repo, so the plain `https://` URL resolves with no
+-- credentials — unlike `git@github.com:...`, which git treats as an SSH
+-- URL and always tries to authenticate, public repo or not.
+require linen from git "https://github.com/typednotes/linen.git" @ "v1.0.0"
 
 @[default_target]
 lean_lib Ledger

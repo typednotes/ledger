@@ -16,13 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
-      # `lake build` inside the image clones `linen` over SSH (a private
-      # repo) — forwarded into the build via BuildKit's ssh mount rather than
-      # baked into a layer. Requires a deploy key with read access to
-      # typednotes/linen stored as the LINEN_DEPLOY_KEY secret.
-      - uses: webfactory/ssh-agent@v0.9.0
-        with:
-          ssh-private-key: ${{ secrets.LINEN_DEPLOY_KEY }}
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -41,7 +34,6 @@ jobs:
         with:
           context: .
           push: true
-          ssh: default
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

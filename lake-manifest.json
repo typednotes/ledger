@@ -1,7 +1,7 @@
 {"version": "1.2.0",
  "packagesDir": ".lake/packages",
  "packages":
- [{"url": "git@github.com:typednotes/linen.git",
+ [{"url": "https://github.com/typednotes/linen.git",
    "type": "git",
    "subDir": null,
    "scope": "",
