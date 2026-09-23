@@ -23,16 +23,22 @@ concurrent holds can never together overspend a balance.
   - `Idempotency.lean` — `IdempotencyKey`.
   - `Sql/Reserve.lean` — the atomic conditional-insert statement that makes
     hold creation race-free.
-  - `Sql/Migrate.lean` — applies `sql/*.sql` in order.
+  - `Sql/History.lean` — `sql/` embedded with `include_str`, for
+    `Sql/Migrate.lean`, which applies it to a fresh local database.
   - `Sweeper.lean` — the periodic job that releases expired holds.
+  - `Health.lean` — `GET /health`: `200` while the sweeper runs, `503` once
+    it has stopped.
 - `LedgerTests/` — mirrors `Ledger/` 1:1 with `#guard`-based tests.
 - `sql/` — the Postgres schema, as numbered migration files.
 - `Main.lean` — the `ledger` executable: `lake exe ledger migrate` applies
-  migrations; `lake exe ledger` (no args) runs the sweeper loop.
+  migrations to a local database; `lake exe ledger` (no args) runs the
+  sweeper loop in a background task and serves `/health` on `PORT`.
 
 `broker` and `core` talk to Postgres directly for the request-path
-operations (reserve/settle/record usage) — this service's only running
-process is the background sweeper.
+operations (reserve/settle/record usage) — this service's only real work is
+the background sweeper. It still listens on a port, because a Scaleway
+Serverless Container is not considered started until something does, and
+it is deployed with `minScale := 1` so scale-to-zero cannot stop the sweeper.
 
 ## Building
 
@@ -48,11 +54,26 @@ Postgres FFI links against `libpq`.
 ## Running
 
 ```
-DATABASE_URL=postgres://... lake exe ledger migrate   # apply sql/*.sql
-DATABASE_URL=postgres://... lake exe ledger           # run the sweeper
+DATABASE_URL=postgres://... lake exe ledger migrate   # apply the history (fresh DB)
+DATABASE_URL=postgres://... lake exe ledger           # sweeper + /health
 ```
 
-`LEDGER_SWEEP_INTERVAL_SECONDS` (default `60`) sets the sweep interval.
+`LEDGER_SWEEP_INTERVAL_SECONDS` (default `60`) sets the sweep interval;
+`PORT` (default `8080`) the `/health` port.
+
+The schema references `core`'s `orgs` and `users` (`docs/services/core.md`
+in `typednotes/typednotes`), so those tables must exist first.
+
+## Migrations in production
+
+`typednotes-infra` reads `sql/*.sql` from GitHub at the release tag and
+declares it as a `postgresMigrations` history: the plan names the pending
+work, the apply runs it before the `ledger` container rolls out — after the
+app's history, which infra infers from `references orgs(id)` — and the
+container's own database identity has no DDL rights. To add a migration: add
+`sql/NNNN_description.sql` (and its line in `Ledger.Sql.history`, for local
+`migrate`), tag the release, then in `typednotes-infra` bump ledger's release
+version and add the file to its history. Shipped migrations are append-only.
 
 ## Container
 

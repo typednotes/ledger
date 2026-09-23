@@ -44,4 +44,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=builder /app/.lake/build/bin/ledger /usr/local/bin/ledger
 USER ledger
+# `/health` (see `Ledger.Health`); Scaleway sets `PORT` to the declared port.
+EXPOSE 8080
 ENTRYPOINT ["/usr/local/bin/ledger"]

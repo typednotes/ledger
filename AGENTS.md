@@ -22,8 +22,13 @@ Postgres/SQL, and follows `linen`'s own conventions below.
   workspace, not per-package, so reusing `Tests` here collides with
   `linen`'s.
 - The SQL schema lives under `sql/` as plain, numbered `.sql` migration
-  files (`0001_init.sql`, …), applied in lexical order by
-  `Ledger.Sql.migrate` (`lake exe ledger migrate`).
+  files (`0001_init.sql`, …) — the only copy of the schema. `typednotes-infra`
+  reads them from GitHub at the release tag and applies them in production
+  (as an `infra` `postgresMigrations` history). `Ledger.Sql.history`
+  (`Ledger/Sql/History.lean`) embeds them with `include_str` for
+  `Ledger.Sql.migrate` (`lake exe ledger migrate`) on a local database; a new
+  migration is a new file **and** a new line there. Shipped migrations are
+  append-only — never edit one.
 
 ## Testing
 

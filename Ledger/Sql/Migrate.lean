@@ -1,14 +1,21 @@
 /-
-  Ledger.Sql.Migrate — apply the schema in `sql/`
+  Ledger.Sql.Migrate — apply `Ledger.Sql.history` to a local database
 
-  A minimal, sequential migration runner: read every `sql/NNNN_*.sql` file
-  in name order and run it as one session. There is exactly one migration
-  today (`sql/0001_init.sql`, `services/ledger.md` §4 verbatim); this
-  exists so `lake exe ledger migrate` has somewhere to grow as the schema
-  evolves, without inventing a tracking table this project does not yet
-  need.
+  **Production does not use this.** There, `typednotes-infra` reads the same
+  `sql/*.sql` files at the release tag and applies them as a declared
+  `postgresMigrations` history, ordered after the history that creates
+  `orgs`/`users` (which this schema references) and before the `ledger`
+  container rolls out.
+
+  This is the local and scratch-database path: a minimal, sequential runner
+  over the same embedded history, one session per migration. It does not
+  track what has already run, so it is meant for a fresh database; it keeps
+  no bookkeeping of its own because the history table in production belongs
+  to `infra`, and a second, differently-shaped one here would invite the two
+  to be mixed on one database.
 -/
 
+import Ledger.Sql.History
 import Linen.Database.SQL.Pool
 
 namespace Ledger.Sql
@@ -16,23 +23,13 @@ namespace Ledger.Sql
 open Database.SQL.Pool
 open Database.SQL.Session
 
-/-- Directory containing the numbered `.sql` migration files, relative to
-    the process's working directory (the container's `WORKDIR`). -/
-def migrationsDir : System.FilePath := "sql"
-
-/-- Apply every `.sql` file under `migrationsDir`, in filename order, as
-    one statement each. Meant to be run once against a fresh database
-    (`lake exe ledger migrate`); it does not track which migrations have
-    already run. -/
+/-- Apply every migration in `history`, in order, as one session each.
+    Meant to be run once against a fresh database (`lake exe ledger
+    migrate`); it does not track which migrations have already run. -/
 def migrate (pool : Pool) : IO Unit := do
-  let entries ← migrationsDir.readDir
-  let sqlFiles := entries.filterMap fun e =>
-    if e.fileName.endsWith ".sql" then some e.path else none
-  let sorted := sqlFiles.qsort (fun a b => a.toString < b.toString)
-  for file in sorted do
-    let contents ← IO.FS.readFile file
-    match ← pool.use (Session.sql contents) with
-    | .ok () => IO.println s!"applied {file}"
-    | .error e => throw (IO.userError s!"migration {file} failed: {e}")
+  for (id, sql) in history do
+    match ← pool.use (Session.sql sql) with
+    | .ok () => IO.println s!"applied {id}"
+    | .error e => throw (IO.userError s!"migration {id} failed: {e}")
 
 end Ledger.Sql
