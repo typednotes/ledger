@@ -3,7 +3,7 @@ import Ledger.Sql.History
 open Ledger.Sql
 
 -- The history as of this release: exactly the files in `sql/`.
-#guard history.map (·.1) = ["0001"]
+#guard history.map (·.1) = ["0001", "0002"]
 
 -- Ids strictly increase, so list order *is* application order — the rule
 -- `infra`'s `historyIsSound` checks again on the consumer side.

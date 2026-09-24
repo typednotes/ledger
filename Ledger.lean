@@ -6,6 +6,7 @@ import Ledger.Entry
 import Ledger.Hold
 import Ledger.Idempotency
 import Ledger.Sql.Reserve
+import Ledger.Sql.Grant
 import Ledger.Sql.History
 import Ledger.Sql.Migrate
 import Ledger.Sweeper

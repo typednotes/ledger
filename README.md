@@ -5,7 +5,8 @@ The `typednotes` usage-ledger service, in Lean 4 on
 
 Implements `docs/services/ledger.md` from `typednotes/typednotes`:
 records `usage_events`, holds a `credit_ledger` balance bounded by
-`credit_holds`, and proves the arithmetic and hold lifecycle sound in Lean
+`credit_holds` (credited by idempotent grants, keyed on
+`credit_ledger.idempotency_key`), and proves the arithmetic and hold lifecycle sound in Lean
 — Postgres itself enforces the one property Lean types cannot: that two
 concurrent holds can never together overspend a balance.
 
@@ -23,20 +24,32 @@ concurrent holds can never together overspend a balance.
   - `Idempotency.lean` — `IdempotencyKey`.
   - `Sql/Reserve.lean` — the atomic conditional-insert statement that makes
     hold creation race-free.
+  - `Sql/Grant.lean` — the idempotent grant statement (`insert into
+    credit_ledger ... on conflict (idempotency_key) do nothing`) and the
+    welcome-grant key `welcome:{org_id}`. The typednotes app issues this
+    exact SQL (it cannot import Lean), so the literal text is the contract
+    (`docs/connections.md` §6 in `typednotes/typednotes`), pinned by
+    `LedgerTests/Ledger/Sql/GrantTest.lean`.
   - `Sql/History.lean` — `sql/` embedded with `include_str`, for
     `Sql/Migrate.lean`, which applies it to a fresh local database.
   - `Sweeper.lean` — the periodic job that releases expired holds.
   - `Health.lean` — `GET /health`: `200` while the sweeper runs, `503` once
     it has stopped.
 - `LedgerTests/` — mirrors `Ledger/` 1:1 with `#guard`-based tests.
-- `sql/` — the Postgres schema, as numbered migration files.
+- `sql/` — the Postgres schema, as numbered migration files:
+  - `0001_init.sql` — `usage_events`, `credit_ledger`, `credit_holds`.
+  - `0002_credit_ledger_idempotency.sql` — `credit_ledger.idempotency_key
+    text unique` (nullable; NULLs stay distinct, so rows without a key,
+    such as usage entries, are unaffected), the conflict target of grants.
 - `Main.lean` — the `ledger` executable: `lake exe ledger migrate` applies
   migrations to a local database; `lake exe ledger` (no args) runs the
   sweeper loop in a background task and serves `/health` on `PORT`.
 
 `broker` and `core` talk to Postgres directly for the request-path
-operations (reserve/settle/record usage) — this service's only real work is
-the background sweeper. It still listens on a port, because a Scaleway
+operations (reserve/settle/record usage), and the typednotes app issues the
+grant statement from `Sql/Grant.lean` itself (the welcome grant on org
+creation, retried safely thanks to its idempotency key) — this service's
+only real work is the background sweeper. It still listens on a port, because a Scaleway
 Serverless Container is not considered started until something does, and
 it is deployed with `minScale := 1` so scale-to-zero cannot stop the sweeper.
 

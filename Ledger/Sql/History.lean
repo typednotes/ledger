@@ -23,6 +23,7 @@ namespace Ledger.Sql
 /-- The full history, oldest first, as `(id, sql)`: `id` is the numeric
     prefix of the file name, and ids sort in application order. -/
 def history : List (String × String) :=
-  [ ("0001", include_str "../../sql/0001_init.sql") ]
+  [ ("0001", include_str "../../sql/0001_init.sql")
+  , ("0002", include_str "../../sql/0002_credit_ledger_idempotency.sql") ]
 
 end Ledger.Sql

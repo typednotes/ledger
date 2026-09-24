@@ -105,9 +105,9 @@ module, `#guard` coverage), and depend on it from here instead.
 `ledger` is not consumed as a Lean/git dependency — it is shipped as a
 container image. `.github/workflows/docker-publish.yml` builds and pushes
 `ghcr.io/typednotes/ledger` on every push to `main` (tagged `edge`) and on
-`v*.*.*` tags (tagged with the matching semver and `latest`). There is no
-separate version bump step in `lakefile.lean`; the image tag *is* the
-version.
+`v*.*.*` tags (tagged with the matching semver and `latest`). The image tag
+*is* the version; keep `lakefile.lean`'s `version` equal to it when tagging
+(as 0.2.0 and 0.3.0 did).
 
 ## Git
 

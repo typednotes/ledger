@@ -16,6 +16,12 @@
   advisory lock, and the application layer must not "check first, then
   insert": that read-then-write is the bug this statement exists to
   make impossible.
+
+  Every parameter is cast (`$1::uuid`, `$3::bigint`): the driver sends
+  parameters untyped, and Postgres cannot deduce one type for `$3` from both
+  a `bigint` column and a `numeric` sum ("inconsistent types deduced for
+  parameter $3"), nor coerce text into the `uuid` columns. Without the casts
+  the statement is refused outright, which callers see as "denied".
 -/
 
 import Linen.Database.SQL.Statement
@@ -40,14 +46,14 @@ structure ReserveParams where
 def reserve : Statement ReserveParams (Option String) :=
   { sql := "
       insert into credit_holds (org_id, run_id, amount, state, expires_at)
-      select $1, $2, $3, 'held', now() + interval '15 minutes'
+      select $1::uuid, $2::uuid, $3::bigint, 'held', now() + interval '15 minutes'
       where (
-        select coalesce(sum(delta), 0) from credit_ledger where org_id = $1
+        select coalesce(sum(delta), 0) from credit_ledger where org_id = $1::uuid
       ) - (
         select coalesce(sum(amount), 0) from credit_holds
-         where org_id = $1 and state = 'held'
-      ) >= $3
-      returning id;
+         where org_id = $1::uuid and state = 'held'
+      ) >= $3::bigint
+      returning id::text;
     "
     encode := (Params.triple Params.text Params.text Params.nat).contramap
       (fun p => (p.orgId, p.runId, p.amount))
