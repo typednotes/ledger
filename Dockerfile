@@ -19,22 +19,10 @@ ENV PATH="/root/.elan/bin:${PATH}"
 WORKDIR /app
 COPY . .
 
-# Lean 4.34.0 vendors its own `Scrt1.o`/`crt1.o`/`crti.o`/`crtn.o` (built
-# against an old glibc) inside the toolchain's `lib/` dir, and `leanc`
-# passes them to the linker by absolute path rather than searching the
-# system's own crt files. Those vendored objects still reference the
-# `__libc_csu_init`/`__libc_csu_fini` compat symbols glibc >= 2.34 dropped,
-# so linking any `lean_exe` against Ubuntu 24.04's glibc (2.39) fails with
-# `undefined symbol: __libc_csu_init` — a Lean-toolchain/glibc mismatch,
-# unrelated to `ledger`'s or `linen`'s own code. `elan toolchain install`
-# forces the toolchain download without yet trying to link anything, so
-# the vendored crt files can be overwritten with this image's own
-# (glibc-2.39-correct) ones before the real `lake build` link happens.
-RUN elan toolchain install "$(cat lean-toolchain)" \
-    && toolchain_lib="$(dirname "$(elan which lean)")/../lib" \
-    && sys_lib="/usr/lib/$(gcc -dumpmachine)" \
-    && cp "$sys_lib/Scrt1.o" "$sys_lib/crt1.o" "$sys_lib/crti.o" "$sys_lib/crtn.o" "$toolchain_lib/"
-
+# No crt-file surgery on the toolchain: `lakefile.lean` names `libpq.so`
+# outright rather than adding `/usr/lib/<multiarch>` to `-L`, so `-lc` keeps
+# resolving to the glibc Lean bundles, which Lean's vendored `Scrt1.o`
+# matches (see the libpq section there).
 RUN lake build ledger
 
 FROM docker.io/library/debian:bookworm-slim AS runtime

@@ -12,38 +12,58 @@ open Lake DSL
 -- just surfacing at the final link rather than at compile time, so it isn't
 -- caught by building the `Ledger`/`Tests` libraries alone.
 --
--- Copied from `linen`'s own `pkgConfig`/`pkgLinkFlags` helpers rather than
--- imported, since `moreLinkArgs` is evaluated per-package and `linen`'s
--- versions are not exposed as part of its public API.
+-- The flags name `libpq`'s file outright (`pkgAbsoluteLibs`) instead of
+-- adding its directory to the linker's search path. On Linux that directory
+-- is `/usr/lib/<multiarch>`, which also holds the *system* `libc.so`: an
+-- `-L` for it makes `-lc` resolve there instead of to the glibc Lean
+-- bundles, and Lean's vendored `Scrt1.o` then fails the link with
+-- `undefined symbol: __libc_csu_init` (the compat symbol glibc 2.34
+-- dropped). Naming the file adds nothing to the search order, so the
+-- bundled glibc keeps winning. This is the recipe `linen` hands consumers
+-- (its CI's consumer job, `linen/docs/linking.md`), used here on every
+-- platform, as there: on macOS it names Homebrew's keg-only
+-- `libpq.dylib`, which is exactly what the `-L` was needed for.
+--
+-- Copied from `linen`'s own `pkgConfig`/`pkgAbsoluteLibs` rather than
+-- imported: a dependency's lakefile definitions are not in scope in a
+-- consumer's lakefile.
 
 /-- Run `pkg-config <args>` and return its stdout split into individual flags.
-    Returns `#[]` when pkg-config (or the queried package) is unavailable.
-    Sets `PKG_CONFIG_ALLOW_SYSTEM_LIBS=1`: without it, `--libs` silently
-    drops the `-L` for directories pkg-config treats as "system" defaults
-    (e.g. Debian/Ubuntu's multiarch path) — which Lean's bundled `ld.lld`
-    does *not* search by default, so `-lpq` alone fails with `unable to
-    find library -lpq` even though `libpq.so` is right there. -/
+    Returns `#[]` when pkg-config (or the queried package) is unavailable. -/
 def pkgConfig (args : Array String) : IO (Array String) := do
-  let out ← IO.Process.output {
-    cmd := "pkg-config", args
-    env := #[("PKG_CONFIG_ALLOW_SYSTEM_LIBS", "1")]
-  }
+  let out ← IO.Process.output { cmd := "pkg-config", args }
   if out.exitCode != 0 then
     return #[]
   let normalized := (out.stdout.replace "\n" " ").replace "\t" " "
   return (normalized.splitOn " ").filter (· != "") |>.toArray
 
-/-- Link flags for a pkg-config package: its `--libs` (with system `-L`
-    dirs kept, see `pkgConfig`), plus a belt-and-suspenders explicit
-    `-L<libdir>` from `--variable=libdir` for `.pc` files that don't embed
-    an `-L` in `Libs:` at all and instead expect the caller to know their
-    install layout. Not every `.pc` file defines a `libdir` variable (e.g.
-    `libpq.pc` doesn't), so this is best-effort on top of `--libs`, not a
-    replacement for it. -/
-def pkgLinkFlags (pkg : String) : IO (Array String) := do
+/-- Link flags for a pkg-config package that name each library file outright
+    (`<libdir>/libfoo.so`, or `.dylib` on macOS) rather than adding its
+    directory to `-L` (see the section comment). Every `-L` from `--libs` is
+    dropped; an `-lfoo` whose file is absent from `--variable=libdir` stays
+    `-lfoo`, so a distro with an unusual layout still gets a chance. -/
+def pkgAbsoluteLibs (pkg : String) : IO (Array String) := do
   let libs ← pkgConfig #["--libs", pkg]
-  let libdir ← pkgConfig #["--variable=libdir", pkg]
-  return (libdir.filter (· != "")).map ("-L" ++ ·) ++ libs
+  let libdirs ← pkgConfig #["--variable=libdir", pkg]
+  let libdir : Option String := (libdirs.filter (· != ""))[0]?
+  let ext := if System.Platform.isOSX then "dylib" else "so"
+  let mut out : Array String := #[]
+  for tok in libs do
+    if tok.startsWith "-L" then
+      continue                                  -- deliberately dropped
+    else if tok.startsWith "-l" then
+      let name := (tok.drop 2).toString
+      match libdir with
+      | some d =>
+        let candidate : System.FilePath := (d : System.FilePath) / s!"lib{name}.{ext}"
+        if ← candidate.pathExists then
+          out := out.push candidate.toString
+        else
+          out := out.push tok
+      | none => out := out.push tok
+    else
+      out := out.push tok
+  return out
 
 -- `mkDef` names the generated `def` via `mkIdent`, not a bare identifier
 -- written inside the `` `(...) `` quotation: a bare identifier there is
@@ -55,7 +75,7 @@ run_cmd do
   let mkDef (n : Name) (flags : Array String) : CommandElabM Unit := do
     let lits : Array (TSyntax `term) := flags.map (fun s => quote s)
     elabCommand (← `(def $(mkIdent n) : Array String := #[$lits,*]))
-  let pq ← pkgLinkFlags "libpq"
+  let pq ← pkgAbsoluteLibs "libpq"
   mkDef `pqLinkArgs pq
 
 package ledger where
