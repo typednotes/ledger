@@ -59,13 +59,13 @@ run_cmd do
   mkDef `pqLinkArgs pq
 
 package ledger where
-  version := v!"0.3.0"
+  version := v!"0.3.1"
   moreLinkArgs := pqLinkArgs
 
 -- `linen` is a public repo, so the plain `https://` URL resolves with no
 -- credentials — unlike `git@github.com:...`, which git treats as an SSH
 -- URL and always tries to authenticate, public repo or not.
-require linen from git "https://github.com/typednotes/linen.git" @ "v1.0.0"
+require linen from git "https://github.com/typednotes/linen.git" @ "v1.5.0"
 
 @[default_target]
 lean_lib Ledger
