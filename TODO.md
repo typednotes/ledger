@@ -1,11 +1,35 @@
 # TODO
 
-Suggestions from the linen v1.6.1 dependency review (2026-09-28). Nothing here
-blocks the bump — ledger uses none of the modules linen 1.6.x changed. Each
-item names where it comes from; re-check before acting.
+Suggestions from the linen v1.6.1 dependency review (2026-09-28), re-checked
+for the bump to linen v1.6.2 (0.3.2): line references are current, and
+nothing here blocks either bump — ledger uses none of the modules linen 1.6.x
+changed (1.6.2 only touches `raw!`). Each item names where it comes from;
+re-check before acting.
 
 Moves into linen follow linen's `AGENTS.md` ("Importing external code"): the
 linen change and the deletion of ledger's copy happen in the same pass.
+
+## Correctness
+
+- [ ] **Close the reserve race.** `Ledger/Sql/Reserve.lean`'s
+  `insert … select … where (sum delta) − (sum held) ≥ amount` is one
+  statement, but under `READ COMMITTED`/`REPEATABLE READ` two concurrent
+  reserves for the same org each read a snapshot without the other's
+  uncommitted hold and can both insert — write skew, i.e. overspend. Nothing
+  locks or constrains it; the module doc's "no advisory lock" is the gap, not
+  a feature. Options: take `pg_advisory_xact_lock(hashtextextended(org_id::text, 0))`
+  inside the statement (e.g. as a CTE), lock the org's row (`select … from
+  orgs where id = $1 for update`), or require callers to run it under
+  `SERIALIZABLE` and retry on `40001`. Any of these changes the contract
+  `liaison/Liaison/Budget.lean` repeats — coordinate the change there (see
+  "Reservation SQL is shared with liaison" below), update
+  `LedgerTests/Ledger/Sql/ReserveTest.lean`, and add a live-Postgres
+  concurrency test (none exists today). Until then the README flags it (the
+  Guarantees table's ⚠ row and "Known gap" note, the Features bullet, the
+  layout table), and the repository's `double-spend-prevention` topic states
+  the intent, not a current guarantee. When it is closed, remove those flags
+  and correct `Reserve.lean`'s module doc, which still says the statement
+  "actually prevents double-spend". (M)
 
 ## CI
 
@@ -14,7 +38,15 @@ linen change and the deletion of ledger's copy happen in the same pass.
   imports `Main`, so the copied libpq link recipe is only exercised by the
   Docker publish. linen's `AGENTS.md` records a bug that only an executable
   link (`Scrt1.o`) exposes. Add `lake build ledger`, and a macOS leg for the
-  lakefile's `.dylib` branch (`lakefile.lean:51`). (S)
+  lakefile's `.dylib` branch (`lakefile.lean:49`). (S)
+- [ ] **Verify the Docker image after the Actions bump.** The publish workflow
+  now uses `docker/*-action` v4/v6/v7 and `actions/checkout@v7` (Node 24,
+  deprecated inputs removed — none of which ledger uses), untested until the
+  first push to `main`. The image could not be built locally (Docker Desktop
+  and the registry need a corporate sign-in). Once it builds, consider moving
+  the runtime from `debian:bookworm-slim` to `trixie-slim` (current stable;
+  `libpq.so.5` is the same soname), together with liaison, which uses the same
+  base. (S)
 
 ## Building blocks to share
 
@@ -35,14 +67,15 @@ linen change and the deletion of ledger's copy happen in the same pass.
 ## Workarounds that linen could remove
 
 - [ ] **libpq for consumers' executables.** `lakefile.lean:26-76` copies
-  `pkgConfig`/`pkgAbsoluteLibs` because Lake does not pass a dependency's
+  `pkgConfig`/`pkgAbsoluteLibs` (and a `run_cmd` defining the link flags)
+  because Lake does not pass a dependency's
   `moreLinkArgs` to a dependent's executable; six repos carry the copy. An idea
   to try in linen: Lake 4.34 adds each imported library's `moreLinkObjs` to the
   executable link (`Lake/Build/Module.lean:1297-1303`), so a `moreLinkObjs`
   target yielding libpq's absolute path might carry it without the `-L` that
   shadows glibc. Unverified — prove it in linen's consumer CI job first. (M)
 - [ ] **One consumer native-dependency list.** The same apt line is in
-  `Dockerfile:11-14`, CI, and four siblings; linen's own
+  `Dockerfile:12-14`, CI, and four siblings; linen's own
   `setup-native-deps` action is for linen's tests (keyrings) and omits
   zlib/unzip. A consumer-facing action or list in linen. (S)
 
