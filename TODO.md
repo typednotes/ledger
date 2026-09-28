@@ -25,11 +25,32 @@ linen change and the deletion of ledger's copy happen in the same pass.
   "Reservation SQL is shared with liaison" below), update
   `LedgerTests/Ledger/Sql/ReserveTest.lean`, and add a live-Postgres
   concurrency test (none exists today). Until then the README flags it (the
-  Guarantees table's ⚠ row and "Known gap" note, the Features bullet, the
-  layout table), and the repository's `double-spend-prevention` topic states
+  Guarantees table's "only under `SERIALIZABLE`" row and "Known gap" note, the
+  Features bullet, the layout table), and the repository's `double-spend-prevention` topic states
   the intent, not a current guarantee. When it is closed, remove those flags
   and correct `Reserve.lean`'s module doc, which still says the statement
   "actually prevents double-spend". (M)
+- [ ] **Consider putting the concurrency requirements in the types.** Today
+  no-overspend is enforced only by SQL text and by callers remembering the
+  isolation level, while the rest of the guarantees are held by Lean types.
+  Possible directions:
+  - Index the transaction type by its isolation level, so that running
+    `reserve` outside `SERIALIZABLE` does not type-check. Check first whether
+    linen's `Session`/transaction API can carry this; if not, the change
+    belongs in linen.
+  - If the race is closed with a lock instead, make `reserve` take a token
+    (e.g. `OrgLock org`) that can only be obtained by acquiring the per-org
+    lock in the same transaction.
+  - State no-overspend as a theorem over interleavings of reserve
+    transactions against a model of Postgres, with the isolation level as an
+    explicit hypothesis. This proves the design under stated assumptions, not
+    the running database.
+
+  Limits to keep in mind: types only constrain callers that go through Lean
+  code. That can include `liaison` once it imports the reservation module (see
+  "Reservation SQL is shared with liaison" below), but not writers that issue
+  raw SQL, and it does not verify the SQL text itself. Depends on the choice
+  made in "Close the reserve race" above. (M-L)
 
 ## CI
 

@@ -5,7 +5,7 @@
 <h1 align="center">ledger</h1>
 
 <p align="center">
-  <em>A usage ledger in Lean 4: the arithmetic and the hold lifecycle proven in Lean, the concurrency left to Postgres.</em>
+  <em>A usage ledger in Lean 4: the arithmetic and the hold lifecycle are proven in Lean, concurrency is left to Postgres.</em>
 </p>
 
 <p align="center">
@@ -21,18 +21,21 @@
 ---
 
 `ledger` is the `typednotes` usage-ledger service. It records
-`usage_events`, holds a `credit_ledger` balance bounded by `credit_holds`
-(credited by idempotent grants, keyed on `credit_ledger.idempotency_key`),
-and proves the arithmetic and the hold lifecycle sound in Lean — leaving to
-Postgres the one property Lean types cannot express: that two concurrent holds
-can never together overspend a balance (see the
-[caveat](#guarantees) on how far that currently holds). It implements the service described
-in [`typednotes/typednotes`](https://github.com/typednotes/typednotes)'s
-`docs/services/ledger.md`, and is built on
-[`linen`](https://github.com/typednotes/linen).
+`usage_events` and keeps a `credit_ledger` balance, bounded by
+`credit_holds` and credited by idempotent grants keyed on
+`credit_ledger.idempotency_key`. The balance arithmetic and the hold
+lifecycle are proven in Lean.
 
-> Lean makes the arithmetic and the lifecycle correct. Postgres makes the
-> concurrency correct — once the reserve race below is closed.
+One property is not proven here: that two concurrent holds can never
+together overspend a balance. It could be stated in Lean, but reserves are
+SQL statements that other services send directly to Postgres, so no Lean
+code is involved in executing them. The property is left to Postgres, with
+a known gap described under [Guarantees](#guarantees).
+
+This service is specified in
+[`typednotes/typednotes`](https://github.com/typednotes/typednotes)'s
+`docs/services/ledger.md` and is built on
+[`linen`](https://github.com/typednotes/linen).
 
 ## Table of contents
 
@@ -50,98 +53,100 @@ in [`typednotes/typednotes`](https://github.com/typednotes/typednotes)'s
 
 ## Features
 
-- **Proven balance arithmetic** — `Credits := Nat`, `Micros := Int`, the
+- **Balance arithmetic**: `Credits := Nat`, `Micros := Int`, the
   `credit_ledger` row type with `balance`, and the `balance_append` theorem.
-- **A typed hold lifecycle** — `HoldStep` and `Settlement` make an illegal
+- **Typed hold lifecycle**: `HoldStep` and `Settlement` make an illegal
   transition (anything out of `.settled` or `.released`) unrepresentable.
-- **Single-statement reserves** — one conditional insert, never a
+- **Single-statement reserves**: one conditional insert, never a
   read-then-write in application code. Race-free only under `SERIALIZABLE`
-  isolation today; see [Guarantees](#guarantees).
-- **Idempotent grants** — `insert into credit_ledger ... on conflict
+  isolation for now; see [Guarantees](#guarantees).
+- **Idempotent grants**: `insert into credit_ledger ... on conflict
   (idempotency_key) do nothing`, with the welcome-grant key
-  `welcome:{org_id}`; safe to retry.
-- **The hold sweeper** — a cancellable background loop that releases expired
-  holds, surviving a failed sweep by logging and retrying.
-- **An honest health check** — `GET /health` is `200` while the sweeper runs
-  and `503` once it has stopped.
-- **Tested by construction** — `LedgerTests/` mirrors `Ledger/` 1:1 with
-  `#guard` checks, so building it runs every test.
+  `welcome:{org_id}`, so retries are safe.
+- **Hold sweeper**: a cancellable background loop that releases expired
+  holds. A failed sweep is logged and retried.
+- **Health check**: `GET /health` returns `200` while the sweeper runs and
+  `503` once it has stopped.
+- **Tests**: `LedgerTests/` mirrors `Ledger/` file for file with `#guard`
+  checks, so building it runs every test.
 
 ## Role
 
-Every credit an org spends passes through the ledger's tables. The ledger is
-the record of **what an org may spend, what is reserved, and what was spent**:
+Every credit an org spends goes through the ledger's tables. They record
+**what an org may spend, what is reserved, and what was spent**:
 
-1. **Credit** — a purchase, or a grant (e.g. the welcome grant on org
-   creation), appends a positive row to `credit_ledger`.
-2. **Reserve** — before delegated work runs, the broker
+1. **Credit**: a purchase or a grant (e.g. the welcome grant on org
+   creation) appends a positive row to `credit_ledger`.
+2. **Reserve**: before delegated work runs, the broker
    ([`liaison`](https://github.com/typednotes/liaison)) places a hold on
    `credit_holds` for the run's budget, *only if* the balance covers it.
-3. **Settle or release** — when the work ends, the hold is settled at what was
-   actually spent (at most the hold) or released; an abandoned hold expires
-   and the sweeper releases it.
-4. **Record** — usage lands in `usage_events` (with what we paid and what we
-   charged) and as a negative `credit_ledger` row.
+3. **Settle or release**: when the work ends, the hold is either settled at
+   the amount actually spent (at most the hold) or released. An abandoned
+   hold expires and the sweeper releases it.
+4. **Record**: usage is written to `usage_events` (with what we paid and
+   what we charged) and as a negative `credit_ledger` row.
 
-The balance is never stored: it is the sum of `credit_ledger`, and the
-spendable balance is that minus the holds still `held`.
+The balance is never stored. It is the sum of `credit_ledger`, and the
+spendable balance is that sum minus the holds still `held`.
 
 ## Guarantees
 
-Each guarantee is held by exactly one mechanism, and the mechanism is named:
-a Lean type or theorem (checked by the kernel when the library builds), a
-single Postgres statement (checked by the database at run time), or a pinned
-test.
+Each guarantee below lists the mechanism that enforces it: a Lean type or
+theorem (checked by the kernel when the library builds), a single Postgres
+statement (checked by the database at run time), or a pinned test.
 
 | Guarantee | Held by | Where |
 |---|---|---|
 | No negative purchase, grant, hold or spend | types: `Credits := Nat` | [`Ledger/Credits.lean`](Ledger/Credits.lean) |
-| Money is exact — no floats, no rounding | types: `Credits := Nat`, `Micros := Int`; no `Float`/`Rat` imported | [`Ledger/Credits.lean`](Ledger/Credits.lean) |
-| Each entry's sign is fixed by its kind (a refund of usage vs a chargeback cannot be confused) | types: one `Entry` constructor per sign | [`Ledger/Entry.lean`](Ledger/Entry.lean) |
+| Money is exact: no floats, no rounding | types: `Credits := Nat`, `Micros := Int`; no `Float`/`Rat` imported | [`Ledger/Credits.lean`](Ledger/Credits.lean) |
+| Each entry's sign is fixed by its kind (a refund of usage and a chargeback cannot be confused) | types: one `Entry` constructor per sign | [`Ledger/Entry.lean`](Ledger/Entry.lean) |
 | A balance can be snapshotted and resumed: folding a prefix then the rest equals folding everything | theorem `balance_append` | [`Ledger/Entry.lean`](Ledger/Entry.lean) |
 | A hold is settled or released at most once, never both | types: `HoldStep` has no transition out of `.settled` or `.released` | [`Ledger/Hold.lean`](Ledger/Hold.lean) |
 | A settlement never exceeds its hold | types: `Settlement h` carries a proof `actual ≤ h.amount` | [`Ledger/Hold.lean`](Ledger/Hold.lean) |
 | A retried usage record is recorded once | types: `IdempotencyKey` is derived from the request and attempt only (private constructor); Postgres: `unique (idempotency_key)` | [`Ledger/Idempotency.lean`](Ledger/Idempotency.lean), [`sql/`](sql) |
-| **Concurrent holds never overspend a balance** — ⚠ *only under `SERIALIZABLE`*, see below | Postgres: one conditional `insert … select … where balance − held ≥ amount` — no read-then-write in application code | [`Ledger/Sql/Reserve.lean`](Ledger/Sql/Reserve.lean) |
+| **Concurrent holds never overspend a balance** (*only under `SERIALIZABLE`*, see below) | Postgres: one conditional `insert ... select ... where balance - held >= amount`, no read-then-write in application code | [`Ledger/Sql/Reserve.lean`](Ledger/Sql/Reserve.lean) |
 | A retried grant credits once | Postgres: `on conflict (idempotency_key) do nothing`, key `welcome:{org_id}` | [`Ledger/Sql/Grant.lean`](Ledger/Sql/Grant.lean) |
 | The app issues exactly the grant statement ledger owns | test: `grantSql`'s text is pinned | [`LedgerTests/Ledger/Sql/GrantTest.lean`](LedgerTests/Ledger/Sql/GrantTest.lean) |
-| An expired hold is released exactly once, even racing a settlement | Postgres: `update … where state = 'held' and expires_at < now()` | [`Ledger/Sweeper.lean`](Ledger/Sweeper.lean) |
-| A dead sweeper is noticed | health: `GET /health` is `503` once the sweeper stopped | [`Ledger/Health.lean`](Ledger/Health.lean) |
+| An expired hold is released exactly once, even when racing a settlement | Postgres: `update ... where state = 'held' and expires_at < now()` | [`Ledger/Sweeper.lean`](Ledger/Sweeper.lean) |
+| A dead sweeper is noticed | health: `GET /health` returns `503` once the sweeper has stopped | [`Ledger/Health.lean`](Ledger/Health.lean) |
 
-What is **not** claimed: Lean cannot see two containers, so no Lean theorem
-states no-double-spend — that is the reserve statement's job, and it rests on
+No Lean theorem proves that concurrent reserves cannot double-spend. Such a
+theorem could be stated, for example over all interleavings of reserve
+transactions, but it would be about a model of Postgres isolation rather
+than the running database, and reserves are issued by other services as
+plain SQL. The guarantee therefore rests on the reserve statement and on
 Postgres's semantics for a single statement.
 
-> **⚠ Known gap — the reserve race.** A single statement is atomic, but not
-> isolated from a concurrent one. Under Postgres's default `READ COMMITTED`
-> (and under `REPEATABLE READ`), two concurrent reserves for the same org each
-> evaluate `balance − held` against a snapshot that does not contain the
-> other's uncommitted hold, so both can insert and together overspend (write
-> skew). Nothing in the statement — no lock, no constraint — prevents it.
-> Today the guarantee holds only if callers run `reserve` under
-> `SERIALIZABLE` (and retry on `40001`); `ledger` does not set or check the
-> isolation level. Closing it here — e.g. a per-org
-> `pg_advisory_xact_lock` in the statement — changes a contract shared with
-> `liaison`, and is tracked in [`TODO.md`](TODO.md).
+> **Known gap: the reserve race.** A single statement is atomic, but it is
+> not isolated from a concurrent one. Under Postgres's default
+> `READ COMMITTED` (and under `REPEATABLE READ`), two concurrent reserves
+> for the same org each evaluate `balance - held` against a snapshot that
+> does not include the other's uncommitted hold. Both can insert and
+> together overspend (write skew). Nothing in the statement, neither a lock
+> nor a constraint, prevents it. For now the guarantee holds only if
+> callers run `reserve` under `SERIALIZABLE` and retry on `40001`; `ledger`
+> does not set or check the isolation level. Fixing it here, for example
+> with a per-org `pg_advisory_xact_lock` in the statement, changes a
+> contract shared with `liaison`, and is tracked in [`TODO.md`](TODO.md).
 
-The SQL statements are pinned
-as text by the tests (`LedgerTests/Ledger/Sql/`), not verified, and the test
-suite does not run them against a database. The hold phase
-itself lives in Postgres; `HoldStep` constrains the Lean code that moves it,
-not other writers of the table.
+The SQL statements are pinned as text by the tests
+(`LedgerTests/Ledger/Sql/`). They are not verified, and the test suite does
+not run them against a database. The hold state itself lives in Postgres;
+`HoldStep` constrains the Lean code that changes it, not other writers of
+the table.
 
 ## How it fits together
 
-`broker` ([`liaison`](https://github.com/typednotes/liaison)) and `core` talk
-to Postgres directly for the request-path operations
-(reserve, settle, record usage), and the typednotes app issues the grant
-statement from `Ledger.Sql.Grant` itself (the welcome grant on org creation,
-retried safely thanks to its idempotency key). The app cannot import Lean, so
-the literal SQL text is the contract (`docs/connections.md` §6 in
+`broker` ([`liaison`](https://github.com/typednotes/liaison)) and `core`
+talk to Postgres directly for the request-path operations (reserve, settle,
+record usage). The typednotes app issues the grant statement from
+`Ledger.Sql.Grant` itself (the welcome grant on org creation, safe to retry
+because of its idempotency key). The app cannot import Lean, so the literal
+SQL text is the contract (`docs/connections.md` section 6 in
 `typednotes/typednotes`), pinned by `LedgerTests/Ledger/Sql/GrantTest.lean`.
 
-This service's only runtime work is therefore the background sweeper. It
-still listens on a port, because a Scaleway Serverless Container is not
+The only runtime work of this service is therefore the background sweeper.
+It still listens on a port, because a Scaleway Serverless Container is not
 considered started until something does, and it is deployed with
 `minScale := 1` so scale-to-zero cannot stop the sweeper.
 
@@ -154,8 +159,8 @@ lake build            # the Ledger library
 lake build ledger     # the `ledger` executable
 ```
 
-Requires `libpq` and `pkg-config` — `linen`'s Postgres FFI links against
-`libpq` (`brew install libpq pkg-config` on macOS,
+Requires `libpq` and `pkg-config`, since `linen`'s Postgres FFI links
+against `libpq` (`brew install libpq pkg-config` on macOS,
 `apt-get install libpq-dev pkg-config` on Debian/Ubuntu).
 
 ### Test
@@ -185,27 +190,28 @@ exist first.
 
 ## HTTP API
 
-- `GET /health` → `200 ok` while the sweeper task is running, `503` once it
-  has stopped — so a container whose sweeper has died is restarted rather
-  than kept looking healthy while expired holds are never released.
+- `GET /health` returns `200 ok` while the sweeper task is running and `503`
+  once it has stopped. A container whose sweeper has died is then restarted
+  instead of reporting healthy while expired holds are never released.
 
-Everything else is `404`.
+Everything else returns `404`.
 
 ## Database schema
 
-The schema lives in [`sql/`](sql) as numbered migration files — the only
-copy of it:
+The schema lives in [`sql/`](sql) as numbered migration files. This is the
+only copy of it:
 
 | File | Adds |
 |---|---|
 | [`0001_init.sql`](sql/0001_init.sql) | `usage_events`, `credit_ledger`, `credit_holds` |
-| [`0002_credit_ledger_idempotency.sql`](sql/0002_credit_ledger_idempotency.sql) | `credit_ledger.idempotency_key text unique` — nullable, so rows without a key (such as usage entries) are unaffected; the conflict target of grants |
+| [`0002_credit_ledger_idempotency.sql`](sql/0002_credit_ledger_idempotency.sql) | `credit_ledger.idempotency_key text unique`: nullable, so rows without a key (such as usage entries) are unaffected; the conflict target of grants |
 
 **In production**, `typednotes-infra` reads `sql/*.sql` from GitHub at the
-release tag and declares it as a `postgresMigrations` history: the plan names
-the pending work, and the apply runs it before the `ledger` container rolls
-out — after the app's history, which infra infers from `references orgs(id)`.
-The container's own database identity has no DDL rights.
+release tag and declares it as a `postgresMigrations` history. The plan
+lists the pending migrations, and the apply runs them before the `ledger`
+container rolls out, after the app's history (which infra infers from
+`references orgs(id)`). The container's own database identity has no DDL
+rights.
 
 **Locally**, `lake exe ledger migrate` applies the same files, embedded with
 `include_str` by `Ledger.Sql.history`.
@@ -213,7 +219,7 @@ The container's own database identity has no DDL rights.
 To add a migration: add `sql/NNNN_description.sql` and its line in
 `Ledger.Sql.history`, tag the release, then in `typednotes-infra` bump
 ledger's release version and add the file to its history. Shipped migrations
-are append-only — never edit one.
+are append-only; never edit one.
 
 ## Project layout
 
@@ -230,14 +236,14 @@ are append-only — never edit one.
 | [`Ledger/Sql/Migrate.lean`](Ledger/Sql/Migrate.lean) | applies the history to a fresh local database |
 | [`Ledger/Sweeper.lean`](Ledger/Sweeper.lean) | the periodic job that releases expired holds |
 | [`Ledger/Health.lean`](Ledger/Health.lean) | `GET /health` |
-| [`LedgerTests/`](LedgerTests) | mirrors `Ledger/` 1:1 with `#guard`-based tests |
+| [`LedgerTests/`](LedgerTests) | mirrors `Ledger/` file for file with `#guard`-based tests |
 | [`Main.lean`](Main.lean) | the `ledger` executable (`ledger` / `ledger migrate`) |
 
 See [`AGENTS.md`](AGENTS.md) for the coding conventions.
 
 ## Docker
 
-Images are published to `ghcr.io/typednotes/ledger` — `edge` from `main`,
+Images are published to `ghcr.io/typednotes/ledger`: `edge` from `main`,
 and `latest`, `X.Y.Z` and `X.Y` from release tags.
 
 ```sh
