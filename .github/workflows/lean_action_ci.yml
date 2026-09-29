@@ -11,6 +11,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
-      - run: sudo apt-get update && sudo apt-get install -y libpq-dev libssl-dev pkg-config unzip zlib1g-dev libsecret-1-dev
+      # linen's native build dependencies, from linen's own list at the
+      # version ledger requires.
+      - uses: typednotes/linen/.github/actions/setup-native-deps@v1.7.0
+        with:
+          keyring: false
       - uses: leanprover/lean-action@v1
       - run: lake build LedgerTests

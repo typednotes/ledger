@@ -1,9 +1,9 @@
 # TODO
 
 Suggestions from the linen v1.6.1 dependency review (2026-09-28), re-checked
-for the bump to linen v1.6.2 (0.3.2): line references are current, and
-nothing here blocks either bump — ledger uses none of the modules linen 1.6.x
-changed (1.6.2 only touches `raw!`). Each item names where it comes from;
+for the bumps to linen v1.6.2 (0.3.2) and v1.7.0 (0.3.3): nothing here blocks
+them — ledger uses none of the modules linen 1.6.x or 1.7.0 changed (1.6.2
+only touches `raw!`; 1.7.0 adds modules moved from lode and lun). Each item names where it comes from;
 re-check before acting.
 
 Moves into linen follow linen's `AGENTS.md` ("Importing external code"): the
@@ -95,10 +95,10 @@ linen change and the deletion of ledger's copy happen in the same pass.
   executable link (`Lake/Build/Module.lean:1297-1303`), so a `moreLinkObjs`
   target yielding libpq's absolute path might carry it without the `-L` that
   shadows glibc. Unverified — prove it in linen's consumer CI job first. (M)
-- [ ] **One consumer native-dependency list.** The same apt line is in
-  `Dockerfile:12-14`, CI, and four siblings; linen's own
-  `setup-native-deps` action is for linen's tests (keyrings) and omits
-  zlib/unzip. A consumer-facing action or list in linen. (S)
+- [x] **One consumer native-dependency list.** linen 1.7.0 ships it
+  (`ci/native-deps/apt.txt`, and the `setup-native-deps` action with
+  `keyring: false`); CI and the Dockerfile read it at the linen version
+  `lakefile.lean` requires (0.3.3). (S)
 
 ## Small
 
