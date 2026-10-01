@@ -33,9 +33,9 @@ code is involved in executing them. The property is left to Postgres, with
 a known gap described under [Guarantees](#guarantees).
 
 This service is specified in
-[`typednotes/typednotes`](https://github.com/typednotes/typednotes)'s
-`docs/services/ledger.md` and is built on
-[`linen`](https://github.com/typednotes/linen).
+[`typednotes/typednotes`](https://github.com/typednotes/typednotes/tree/main)'s
+[`docs/services/ledger.md`](https://github.com/typednotes/typednotes/blob/main/docs/services/ledger.md) and is built on
+[`linen`](https://github.com/typednotes/linen/tree/main).
 
 ## Table of contents
 
@@ -78,7 +78,7 @@ Every credit an org spends goes through the ledger's tables. They record
 1. **Credit**: a purchase or a grant (e.g. the welcome grant on org
    creation) appends a positive row to `credit_ledger`.
 2. **Reserve**: before delegated work runs, the broker
-   ([`liaison`](https://github.com/typednotes/liaison)) places a hold on
+   ([`liaison`](https://github.com/typednotes/liaison/tree/main)) places a hold on
    `credit_holds` for the run's budget, *only if* the balance covers it.
 3. **Settle or release**: when the work ends, the hold is either settled at
    the amount actually spent (at most the hold) or released. An abandoned
@@ -97,18 +97,18 @@ statement (checked by the database at run time), or a pinned test.
 
 | Guarantee | Held by | Where |
 |---|---|---|
-| No negative purchase, grant, hold or spend | types: `Credits := Nat` | [`Ledger/Credits.lean`](Ledger/Credits.lean) |
-| Money is exact: no floats, no rounding | types: `Credits := Nat`, `Micros := Int`; no `Float`/`Rat` imported | [`Ledger/Credits.lean`](Ledger/Credits.lean) |
-| Each entry's sign is fixed by its kind (a refund of usage and a chargeback cannot be confused) | types: one `Entry` constructor per sign | [`Ledger/Entry.lean`](Ledger/Entry.lean) |
-| A balance can be snapshotted and resumed: folding a prefix then the rest equals folding everything | theorem `balance_append` | [`Ledger/Entry.lean`](Ledger/Entry.lean) |
-| A hold is settled or released at most once, never both | types: `HoldStep` has no transition out of `.settled` or `.released` | [`Ledger/Hold.lean`](Ledger/Hold.lean) |
-| A settlement never exceeds its hold | types: `Settlement h` carries a proof `actual ≤ h.amount` | [`Ledger/Hold.lean`](Ledger/Hold.lean) |
-| A retried usage record is recorded once | types: `IdempotencyKey` is derived from the request and attempt only (private constructor); Postgres: `unique (idempotency_key)` | [`Ledger/Idempotency.lean`](Ledger/Idempotency.lean), [`sql/`](sql) |
-| **Concurrent holds never overspend a balance** (*only under `SERIALIZABLE`*, see below) | Postgres: one conditional `insert ... select ... where balance - held >= amount`, no read-then-write in application code | [`Ledger/Sql/Reserve.lean`](Ledger/Sql/Reserve.lean) |
-| A retried grant credits once | Postgres: `on conflict (idempotency_key) do nothing`, key `welcome:{org_id}` | [`Ledger/Sql/Grant.lean`](Ledger/Sql/Grant.lean) |
-| The app issues exactly the grant statement ledger owns | test: `grantSql`'s text is pinned | [`LedgerTests/Ledger/Sql/GrantTest.lean`](LedgerTests/Ledger/Sql/GrantTest.lean) |
-| An expired hold is released exactly once, even when racing a settlement | Postgres: `update ... where state = 'held' and expires_at < now()` | [`Ledger/Sweeper.lean`](Ledger/Sweeper.lean) |
-| A dead sweeper is noticed | health: `GET /health` returns `503` once the sweeper has stopped | [`Ledger/Health.lean`](Ledger/Health.lean) |
+| No negative purchase, grant, hold or spend | types: `Credits := Nat` | [`Ledger/Credits.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Credits.lean) |
+| Money is exact: no floats, no rounding | types: `Credits := Nat`, `Micros := Int`; no `Float`/`Rat` imported | [`Ledger/Credits.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Credits.lean) |
+| Each entry's sign is fixed by its kind (a refund of usage and a chargeback cannot be confused) | types: one `Entry` constructor per sign | [`Ledger/Entry.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Entry.lean) |
+| A balance can be snapshotted and resumed: folding a prefix then the rest equals folding everything | theorem `balance_append` | [`Ledger/Entry.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Entry.lean) |
+| A hold is settled or released at most once, never both | types: `HoldStep` has no transition out of `.settled` or `.released` | [`Ledger/Hold.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Hold.lean) |
+| A settlement never exceeds its hold | types: `Settlement h` carries a proof `actual ≤ h.amount` | [`Ledger/Hold.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Hold.lean) |
+| A retried usage record is recorded once | types: `IdempotencyKey` is derived from the request and attempt only (private constructor); Postgres: `unique (idempotency_key)` | [`Ledger/Idempotency.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Idempotency.lean), [`sql/`](https://github.com/typednotes/ledger/tree/main/sql) |
+| **Concurrent holds never overspend a balance** (*only under `SERIALIZABLE`*, see below) | Postgres: one conditional `insert ... select ... where balance - held >= amount`, no read-then-write in application code | [`Ledger/Sql/Reserve.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sql/Reserve.lean) |
+| A retried grant credits once | Postgres: `on conflict (idempotency_key) do nothing`, key `welcome:{org_id}` | [`Ledger/Sql/Grant.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sql/Grant.lean) |
+| The app issues exactly the grant statement ledger owns | test: `grantSql`'s text is pinned | [`LedgerTests/Ledger/Sql/GrantTest.lean`](https://github.com/typednotes/ledger/blob/main/LedgerTests/Ledger/Sql/GrantTest.lean) |
+| An expired hold is released exactly once, even when racing a settlement | Postgres: `update ... where state = 'held' and expires_at < now()` | [`Ledger/Sweeper.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sweeper.lean) |
+| A dead sweeper is noticed | health: `GET /health` returns `503` once the sweeper has stopped | [`Ledger/Health.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Health.lean) |
 
 No Lean theorem proves that concurrent reserves cannot double-spend. Such a
 theorem could be stated, for example over all interleavings of reserve
@@ -127,23 +127,23 @@ Postgres's semantics for a single statement.
 > callers run `reserve` under `SERIALIZABLE` and retry on `40001`; `ledger`
 > does not set or check the isolation level. Fixing it here, for example
 > with a per-org `pg_advisory_xact_lock` in the statement, changes a
-> contract shared with `liaison`, and is tracked in [`TODO.md`](TODO.md).
+> contract shared with `liaison`, and is tracked in [`TODO.md`](https://github.com/typednotes/ledger/blob/main/TODO.md).
 
 The SQL statements are pinned as text by the tests
-(`LedgerTests/Ledger/Sql/`). They are not verified, and the test suite does
+([`LedgerTests/Ledger/Sql/`](https://github.com/typednotes/ledger/tree/main/LedgerTests/Ledger/Sql/)). They are not verified, and the test suite does
 not run them against a database. The hold state itself lives in Postgres;
 `HoldStep` constrains the Lean code that changes it, not other writers of
 the table.
 
 ## How it fits together
 
-`broker` ([`liaison`](https://github.com/typednotes/liaison)) and `core`
+`broker` ([`liaison`](https://github.com/typednotes/liaison/tree/main)) and `core`
 talk to Postgres directly for the request-path operations (reserve, settle,
 record usage). The typednotes app issues the grant statement from
 `Ledger.Sql.Grant` itself (the welcome grant on org creation, safe to retry
 because of its idempotency key). The app cannot import Lean, so the literal
-SQL text is the contract (`docs/connections.md` section 6 in
-`typednotes/typednotes`), pinned by `LedgerTests/Ledger/Sql/GrantTest.lean`.
+SQL text is the contract ([`docs/connections.md`](https://github.com/typednotes/typednotes/blob/main/docs/connections.md) section 6 in
+`typednotes/typednotes`), pinned by [`LedgerTests/Ledger/Sql/GrantTest.lean`](https://github.com/typednotes/ledger/blob/main/LedgerTests/Ledger/Sql/GrantTest.lean).
 
 The only runtime work of this service is therefore the background sweeper.
 It still listens on a port, because a Scaleway Serverless Container is not
@@ -177,7 +177,7 @@ DATABASE_URL=postgres://... lake exe ledger           # sweeper + /health
 ```
 
 The schema references `core`'s `orgs` and `users`
-(`docs/services/core.md` in `typednotes/typednotes`), so those tables must
+([`docs/services/core.md`](https://github.com/typednotes/typednotes/blob/main/docs/services/core.md) in `typednotes/typednotes`), so those tables must
 exist first.
 
 ## Configuration
@@ -198,13 +198,13 @@ Everything else returns `404`.
 
 ## Database schema
 
-The schema lives in [`sql/`](sql) as numbered migration files. This is the
+The schema lives in [`sql/`](https://github.com/typednotes/ledger/tree/main/sql) as numbered migration files. This is the
 only copy of it:
 
 | File | Adds |
 |---|---|
-| [`0001_init.sql`](sql/0001_init.sql) | `usage_events`, `credit_ledger`, `credit_holds` |
-| [`0002_credit_ledger_idempotency.sql`](sql/0002_credit_ledger_idempotency.sql) | `credit_ledger.idempotency_key text unique`: nullable, so rows without a key (such as usage entries) are unaffected; the conflict target of grants |
+| [`0001_init.sql`](https://github.com/typednotes/ledger/blob/main/sql/0001_init.sql) | `usage_events`, `credit_ledger`, `credit_holds` |
+| [`0002_credit_ledger_idempotency.sql`](https://github.com/typednotes/ledger/blob/main/sql/0002_credit_ledger_idempotency.sql) | `credit_ledger.idempotency_key text unique`: nullable, so rows without a key (such as usage entries) are unaffected; the conflict target of grants |
 
 **In production**, `typednotes-infra` reads `sql/*.sql` from GitHub at the
 release tag and declares it as a `postgresMigrations` history. The plan
@@ -225,26 +225,41 @@ are append-only; never edit one.
 
 | Path | Contents |
 |---|---|
-| [`Ledger/Credits.lean`](Ledger/Credits.lean) | `Credits := Nat`, `Micros := Int` |
-| [`Ledger/Ids.lean`](Ledger/Ids.lean) | foreign-key wrapper types owned by other services |
-| [`Ledger/Entry.lean`](Ledger/Entry.lean) | the `credit_ledger` row type, `balance`, `balance_append` |
-| [`Ledger/Hold.lean`](Ledger/Hold.lean) | the `credit_holds` lifecycle (`HoldStep`, `Settlement`) |
-| [`Ledger/Idempotency.lean`](Ledger/Idempotency.lean) | `IdempotencyKey` |
-| [`Ledger/Sql/Reserve.lean`](Ledger/Sql/Reserve.lean) | the single conditional insert that creates a hold (race-free only under `SERIALIZABLE`, see [Guarantees](#guarantees)) |
-| [`Ledger/Sql/Grant.lean`](Ledger/Sql/Grant.lean) | the idempotent grant statement and the `welcome:{org_id}` key |
-| [`Ledger/Sql/History.lean`](Ledger/Sql/History.lean) | `sql/` embedded with `include_str` |
-| [`Ledger/Sql/Migrate.lean`](Ledger/Sql/Migrate.lean) | applies the history to a fresh local database |
-| [`Ledger/Sweeper.lean`](Ledger/Sweeper.lean) | the periodic job that releases expired holds |
-| [`Ledger/Health.lean`](Ledger/Health.lean) | `GET /health` |
-| [`LedgerTests/`](LedgerTests) | mirrors `Ledger/` file for file with `#guard`-based tests |
-| [`Main.lean`](Main.lean) | the `ledger` executable (`ledger` / `ledger migrate`) |
+| [`Ledger/Credits.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Credits.lean) | `Credits := Nat`, `Micros := Int` |
+| [`Ledger/Ids.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Ids.lean) | foreign-key wrapper types owned by other services |
+| [`Ledger/Entry.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Entry.lean) | the `credit_ledger` row type, `balance`, `balance_append` |
+| [`Ledger/Hold.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Hold.lean) | the `credit_holds` lifecycle (`HoldStep`, `Settlement`) |
+| [`Ledger/Idempotency.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Idempotency.lean) | `IdempotencyKey` |
+| [`Ledger/Sql/Reserve.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sql/Reserve.lean) | the single conditional insert that creates a hold (race-free only under `SERIALIZABLE`, see [Guarantees](#guarantees)) |
+| [`Ledger/Sql/Grant.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sql/Grant.lean) | the idempotent grant statement and the `welcome:{org_id}` key |
+| [`Ledger/Sql/History.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sql/History.lean) | `sql/` embedded with `include_str` |
+| [`Ledger/Sql/Migrate.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sql/Migrate.lean) | applies the history to a fresh local database |
+| [`Ledger/Sweeper.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Sweeper.lean) | the periodic job that releases expired holds |
+| [`Ledger/Health.lean`](https://github.com/typednotes/ledger/blob/main/Ledger/Health.lean) | `GET /health` |
+| [`LedgerTests/`](https://github.com/typednotes/ledger/tree/main/LedgerTests) | mirrors `Ledger/` file for file with `#guard`-based tests |
+| [`Main.lean`](https://github.com/typednotes/ledger/blob/main/Main.lean) | the `ledger` executable (`ledger` / `ledger migrate`) |
 
-See [`AGENTS.md`](AGENTS.md) for the coding conventions.
+See [`AGENTS.md`](https://github.com/typednotes/ledger/blob/main/AGENTS.md) for the coding conventions.
 
 ## Docker
 
-Images are published to `ghcr.io/typednotes/ledger`: `edge` from `main`,
-and `latest`, `X.Y.Z` and `X.Y` from release tags.
+Images are published to `ghcr.io/typednotes/ledger` only on version tags by
+[`docker-publish.yml`](https://github.com/typednotes/ledger/blob/main/.github/workflows/docker-publish.yml).
+Stable `vX.Y.Z` tags publish `X.Y.Z`, `X.Y` and automatic `latest` through
+Docker metadata's semver rules. Prereleases publish their full version only,
+without advancing `latest` or a shortened version alias. Main pushes publish no image.
+
+[`lean_action_ci.yml`](https://github.com/typednotes/ledger/blob/main/.github/workflows/lean_action_ci.yml)
+runs on pushes to `main`, pull requests targeting `main`, and manual dispatch.
+Push `main` and wait for CI on the release commit before pushing its version
+tag. The publisher's verification job has only `contents: read` and
+`actions: read`; [`ci/require-main-ci.sh`](https://github.com/typednotes/ledger/blob/main/ci/require-main-ci.sh)
+requires the actual checkout to match the tag's commit, that commit to be
+reachable from `origin/main`, and its latest **push-to-main** CI run to be
+completed/success. Missing, pending or failed latest runs block publication;
+PR/manual CI and another commit's result do not qualify. After verification,
+the image job checks out the verified SHA and uses `packages: write` to build
+and publish, without repeating the full CI suite on tags.
 
 ```sh
 docker run --rm -p 8080:8080 -e DATABASE_URL=... ghcr.io/typednotes/ledger:latest
@@ -259,4 +274,4 @@ docker build -t ledger .
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE).
+Licensed under the [Apache License, Version 2.0](https://github.com/typednotes/ledger/blob/main/LICENSE).
