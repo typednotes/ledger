@@ -79,7 +79,7 @@ run_cmd do
   mkDef `pqLinkArgs pq
 
 package ledger where
-  version := v!"0.3.6"
+  version := v!"0.3.7"
   moreLinkArgs := pqLinkArgs
 
 -- `linen` is a public repo, so the plain `https://` URL resolves with no

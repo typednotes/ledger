@@ -26,6 +26,10 @@
 `credit_ledger.idempotency_key`. The balance arithmetic and the hold
 lifecycle are proven in Lean.
 
+Patch **0.3.7** adds the third migration for explicit organization/account
+deletion: org billing cascades; a deleted actor's usage pointer becomes null in
+surviving orgs. See [the migration contract](docs/release-0.3.7.md).
+
 One property is not proven here: that two concurrent holds can never
 together overspend a balance. It could be stated in Lean, but reserves are
 SQL statements that other services send directly to Postgres, so no Lean
