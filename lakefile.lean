@@ -79,7 +79,7 @@ run_cmd do
   mkDef `pqLinkArgs pq
 
 package ledger where
-  version := v!"0.3.7"
+  version := v!"0.3.8"
   moreLinkArgs := pqLinkArgs
   leanOptions := #[⟨`autoImplicit, false⟩, ⟨`relaxedAutoImplicit, false⟩]
 
