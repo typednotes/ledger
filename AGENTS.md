@@ -18,7 +18,7 @@ Postgres/SQL, and follows `linen`'s own conventions below.
 | Task | Command |
 | --- | --- |
 | Install | Lean toolchain from `lean-toolchain` via [elan](https://github.com/leanprover/elan); `brew install libpq pkg-config` (macOS) or `apt-get install libpq-dev pkg-config` (Debian/Ubuntu); `lake build` fetches the dependencies pinned in `lake-manifest.json` |
-| Type-check | `lake build` (the `Ledger` library) |
+| Type-check | `lake build --wfail` (the `Ledger` library) |
 | Test | `lake build LedgerTests`; `bash ci/test-require-main-ci.sh` (offline release-gate regressions) |
 | Build / release | `lake build ledger` (executable); `docker build -t ledger .` (image); release: a `v*.*.*` tag pushed by the user triggers `.github/workflows/docker-publish.yml` (see Releasing) |
 | CLI (applications) | `DATABASE_URL=postgres://... lake exe ledger [migrate]` (no `--help` yet: any other argument fails with `usage: ledger [migrate]`) |
@@ -156,7 +156,7 @@ experiments are logged too.
 ### Types: use the strongest standard checking the language offers, maximally
 
 - Use the standard type-checker of the language/framework in its strictest practical mode, run it in
-  CI, and keep it at zero errors. In this project: Lean 4 (toolchain `leanprover/lean4:v4.34.0`, pinned in `lean-toolchain`), type-checked by `lake build`, with every theorem checked by Lean's kernel. `lakefile.lean` sets no `leanOptions` or `moreLeanArgs`, so `autoImplicit` and `relaxedAutoImplicit` are at Lean's defaults (enabled), and neither the lakefile nor CI (`leanprover/lean-action@v1` without `build-args`) uses `--wfail` or `warningAsError`: warnings, including `declaration uses 'sorry'`, do not fail the build. "No `sorry`" and "no `partial def`" are project conventions (see Project-specific notes), not compiler-enforced settings.
+  CI, and keep it at zero errors. In this project: Lean 4 (toolchain `leanprover/lean4:v4.34.0`, pinned in `lean-toolchain`), type-checked by `lake build`, with every theorem checked by Lean's kernel. `lakefile.lean` turns `autoImplicit` and `relaxedAutoImplicit` off for the package (`leanOptions`), and CI builds with `--wfail` (`leanprover/lean-action@v1` `build-args` and the `lake build --wfail LedgerTests` step): warnings, including `declaration uses 'sorry'`, fail the build. Run `lake build --wfail` locally. "No `partial def`" remains a project convention (see Project-specific notes), not a compiler-enforced setting.
 - Make illegal states unrepresentable: precise types, enums/sum types over strings and flags, new
   types for identifiers and units, immutable data by default. Avoid `Any`, casts and ignores; when
   one is unavoidable, scope it narrowly and justify it in a comment.
@@ -334,8 +334,8 @@ These project rules take precedence over the Permissions section above.
   `while !(← token.isCancelled) do ...` loop with `Std.CancellationToken`,
   matching `linen`'s own `System.TimeManager` pattern, rather than
   `partial def`.
-- **No `sorry`.** Do not leave `sorry` in committed code unless it is
-  genuinely unavoidable; if so, call it out explicitly.
+- **No `sorry`.** Do not leave `sorry` in committed code; `lake build
+  --wfail` (CI) fails on its warning.
 - Prefer `linen`'s objects over re-wrapping them (e.g. `Database.SQL.Pool`,
   `Session`, `Statement`, `Encoders`/`Decoders`) — do not hand-roll SQL
   connection or (de)serialization code that `linen` already provides.

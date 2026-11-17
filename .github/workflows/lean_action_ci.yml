@@ -22,4 +22,6 @@ jobs:
         with:
           keyring: false
       - uses: leanprover/lean-action@v1
-      - run: lake build LedgerTests
+        with:
+          build-args: "--wfail"
+      - run: lake build --wfail LedgerTests
