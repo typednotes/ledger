@@ -1,12 +1,8 @@
 # syntax=docker/dockerfile:1
 
 FROM docker.io/library/ubuntu:24.04 AS builder
-# `require linen` builds linen's C shims and links its native libraries as
-# part of `lake build` (libpq, OpenSSL, zlib, libsecret; unzip for the DuckDB
-# archive its lakefile downloads) — even though `ledger` only calls into its
-# Postgres/SQL modules. The list is linen's own (`ci/native-deps/apt.txt`), read
-# at the linen version `lakefile.lean` requires, so it cannot drift.
-ARG LINEN_REF=v1.9.2
+# Install native build dependencies from the pinned Linen release.
+ARG LINEN_REF=037925bc5068c54efd86690b78b258b9c6787959
 ADD https://raw.githubusercontent.com/typednotes/linen/${LINEN_REF}/ci/native-deps/apt.txt /tmp/linen-apt.txt
 RUN apt-get update && apt-get install -y --no-install-recommends \
       $(sed 's/#.*//' /tmp/linen-apt.txt) \
@@ -17,18 +13,15 @@ ENV PATH="/root/.elan/bin:${PATH}"
 WORKDIR /app
 COPY . .
 
-# No crt-file surgery on the toolchain: `lakefile.lean` names `libpq.so`
-# outright rather than adding `/usr/lib/<multiarch>` to `-L`, so `-lc` keeps
-# resolving to the glibc Lean bundles, which Lean's vendored `Scrt1.o`
-# matches (see the libpq section there).
 RUN lake build ledger
 
-FROM docker.io/library/debian:bookworm-slim AS runtime
+FROM docker.io/library/ubuntu:24.04 AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libpq5 \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --system --no-create-home --uid 10001 ledger
 WORKDIR /app
 COPY --from=builder /app/.lake/build/bin/ledger /usr/local/bin/ledger
+COPY --from=builder /app/.lake/packages/linen/.lake/build/ffi/liblinen_postgres.so /app/.lake/packages/linen/.lake/build/ffi/
 USER ledger
 # `/health` (see `Ledger.Health`); Scaleway sets `PORT` to the declared port.
 EXPOSE 8080
