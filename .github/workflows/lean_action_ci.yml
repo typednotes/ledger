@@ -18,7 +18,7 @@ jobs:
         run: bash ci/test-require-main-ci.sh
       # linen's native build dependencies, from linen's own list at the
       # version ledger requires.
-      - uses: typednotes/linen/.github/actions/setup-native-deps@v4.1.0
+      - uses: typednotes/linen/.github/actions/setup-native-deps@bcfec9a81d6e738ecb273f89e2102b4712d8e160
         with:
           keyring: false
       - uses: leanprover/lean-action@v1
