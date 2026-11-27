@@ -286,5 +286,5 @@ Licensed under the [Apache License, Version 2.0](https://github.com/typednotes/l
 
 ## Native build
 
-This checkout uses Linen 5.0.0. Lake links the PostgreSQL bridge through
+Ledger 0.3.12 uses Linen 5.0.0. Lake links the PostgreSQL bridge through
 Linen’s imports. The container carries the bridge at its recorded build path.

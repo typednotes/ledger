@@ -2,7 +2,7 @@ import Lake
 open Lake DSL
 
 package ledger where
-  version := v!"0.3.11"
+  version := v!"0.3.12"
 
 -- `linen` is a public repo, so the plain `https://` URL resolves with no
 -- credentials — unlike `git@github.com:...`, which git treats as an SSH
