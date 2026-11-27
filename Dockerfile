@@ -2,7 +2,7 @@
 
 FROM docker.io/library/ubuntu:24.04 AS builder
 # Install native build dependencies from the pinned Linen release.
-ARG LINEN_REF=v4.1.0
+ARG LINEN_REF=bcfec9a81d6e738ecb273f89e2102b4712d8e160
 ADD https://raw.githubusercontent.com/typednotes/linen/${LINEN_REF}/ci/native-deps/apt.txt /tmp/linen-apt.txt
 RUN apt-get update && apt-get install -y --no-install-recommends \
       $(sed 's/#.*//' /tmp/linen-apt.txt) \

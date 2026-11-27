@@ -14,7 +14,7 @@
   <a href="https://github.com/typednotes/ledger/pkgs/container/ledger"><img src="https://img.shields.io/badge/ghcr.io-typednotes%2Fledger-blue?logo=docker" alt="Docker image"></a>
   <a href="https://github.com/typednotes/ledger/tags"><img src="https://img.shields.io/github/v/tag/typednotes/ledger?label=version&sort=semver" alt="Version"></a>
   <a href="https://lean-lang.org/"><img src="https://img.shields.io/badge/Lean-v4.36.0-blue" alt="Lean v4.36.0"></a>
-  <a href="https://github.com/typednotes/linen"><img src="https://img.shields.io/badge/built%20on-linen%20v4.1.0-c9b896" alt="Built on linen v4.1.0"></a>
+  <a href="https://github.com/typednotes/linen"><img src="https://img.shields.io/badge/built%20on-linen%20v5.0.0-c9b896" alt="Built on linen v5.0.0"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
 </p>
 
@@ -286,5 +286,5 @@ Licensed under the [Apache License, Version 2.0](https://github.com/typednotes/l
 
 ## Native build
 
-Ledger 0.3.11 uses Linen 4.1.0. Lake links the PostgreSQL bridge through
+Ledger 0.3.12 uses Linen 5.0.0. Lake links the PostgreSQL bridge through
 Linen’s imports. The container carries the bridge at its recorded build path.

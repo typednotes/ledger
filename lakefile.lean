@@ -2,12 +2,12 @@ import Lake
 open Lake DSL
 
 package ledger where
-  version := v!"0.3.11"
+  version := v!"0.3.12"
 
 -- `linen` is a public repo, so the plain `https://` URL resolves with no
 -- credentials — unlike `git@github.com:...`, which git treats as an SSH
 -- URL and always tries to authenticate, public repo or not.
-require linen from git "https://github.com/typednotes/linen.git" @ "v4.1.0"
+require linen from git "https://github.com/typednotes/linen.git" @ "bcfec9a81d6e738ecb273f89e2102b4712d8e160"
 
 @[default_target]
 lean_lib Ledger
